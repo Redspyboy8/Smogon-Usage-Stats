@@ -372,7 +372,7 @@ filename="Stats/movesets/"+tier+specs+"_calc.txt"
 d = os.path.dirname(filename)
 dCalcFile=open(filename,'w')
 
-if tier.startswith('vgc'):
+if 'vgc' in tier:
 	level = 50
 else:
 	level = 100
