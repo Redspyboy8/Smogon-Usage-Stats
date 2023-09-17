@@ -3,11 +3,10 @@
 #should be much more efficient, as keylookup.pickle need only be loaded once per run.
 # Switch from pickle to json so it can be created by JS
 
-import string
 import sys
 import math
 import pickle as pickle
-import ujson as json
+import json
 import gzip
 import os
 import math
@@ -207,6 +206,29 @@ def movesetCounter(filename, cutoff, teamtype, usage, movesetsfile):
 
 	movesetsfile.write(separator)
 
+	# Generate Json
+	pokeDict = dict()
+	pokeDict["ability"] = keyLookup[max(stuff['Abilities'], key=stuff['Abilities'].get)]
+	pokeDict["item"] = keyLookup[max(stuff['Items'], key=stuff['Items'].get)]
+	if pokeDict["item"] == "Nothing": pokeDict["item"] = ""
+	moveList = list() 
+	for move in sorted(stuff["Moves"], key=stuff["Moves"].get, reverse=True):
+		if len(moveList) == 4: break
+		if (keyLookup[move] == "Nothing"): continue
+		moveList.append(keyLookup[move])
+	pokeDict["moves"] = moveList
+	spread = max(stuff['Spreads'], key=stuff['Spreads'].get)
+	pokeDict["nature"] = spread.split(":")[0]
+	evList = spread.split(":")[1].split("/")
+	evNames = ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
+	evDict = dict()
+	for k,v in zip(evNames, evList):
+		v = int(v)
+		if v > 0:
+			evDict[k] = v
+	pokeDict["evs"] = evDict
+
+
 	for x in ['Abilities','Items','Spreads','Moves','Teammates','Checks and Counters']:
 		table = []
 		line = ' | '+x
@@ -214,6 +236,7 @@ def movesetCounter(filename, cutoff, teamtype, usage, movesetsfile):
 			line = line + ' '
 		line = line + '| \n'
 		movesetsfile.write(line)
+
 
 		for i in stuff[x]:
 			if (x in ['Spreads', 'Teammates','Checks and Counters']):
@@ -266,7 +289,7 @@ def movesetCounter(filename, cutoff, teamtype, usage, movesetsfile):
 			elif x != 'Checks and Counters':
 				total = total + float(table[i][1])/count
 		movesetsfile.write(separator)
-	return stuff
+	return stuff, pokeDict
 
 file = open('keylookup.json', 'rb')
 keyLookup = json.load(file)
@@ -319,12 +342,18 @@ else:
 	pokes=sorted(pokes, key=lambda pokes:-pokes[1])
 
 chaos = {'info': {'metagame': tier, 'cutoff': cutoff, 'cutoff deviation': cutoffdeviation, 'team type': teamtype, 'number of battles': nBattles},'data':{}}
+showdownDict = dict()
 for poke in pokes:
 	if poke[1] < 0.0001: #1/100th of a percent
 		break
-	stuff = movesetCounter('Raw/moveset/'+tier+'/'+keyify(poke[0]),cutoff,teamtype,usage,movesetsfile)
+	stuff, pokeDict = movesetCounter('Raw/moveset/'+tier+'/'+keyify(poke[0]),cutoff,teamtype,usage,movesetsfile)
+	showdownDict[poke[0]] = {"Showdown Usage": pokeDict}
 	stuff['usage']=poke[1]
 	chaos['data'][poke[0]]=stuff
+
+filename="Stats/movesets/"+tier+specs+".json"
+with open(filename, "w") as outfile:
+    outfile.write(json.dumps(showdownDict))
 
 
 filename="Stats/chaos/"+tier+specs+".json"
@@ -336,3 +365,27 @@ file.write(json.dumps(chaos))
 file.close()	
 
 movesetsfile.close()
+
+
+# Generate Damage Calc import
+filename="Stats/movesets/"+tier+specs+"_calc.txt"
+d = os.path.dirname(filename)
+dCalcFile=open(filename,'w')
+
+if tier.startswith('vgc'):
+	level = 50
+else:
+	level = 100
+
+for poke in showdownDict:
+	d = showdownDict[poke]["Showdown Usage"]
+	dCalcFile.write(f"{poke} @ {d['item']}\n")
+	dCalcFile.write(f"Ability: {d['ability']}\n")
+	dCalcFile.write(f"Level: {level}\n")
+	dCalcFile.write(f"EVs: {d['evs'].get('hp',0)} HP / {d['evs'].get('atk',0)} Atk / {d['evs'].get('def',0)} Def / {d['evs'].get('spa',0)} SpA / {d['evs'].get('spd',0)} SpD / {d['evs'].get('spe',0)} Spe\n")
+	dCalcFile.write(f"{d['nature']} Nature\n")
+	for move in d['moves']:
+		dCalcFile.write(f"- {move}\n")
+	dCalcFile.write("\n")
+
+dCalcFile.close()

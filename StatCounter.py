@@ -20,12 +20,10 @@
 #11: poke2 was foddered
 #12: no clue what happened
 
-import string
 import sys
-import math
 import pickle as pickle
 import os
-import ujson as json
+import json
 import gzip
 
 from common import *
@@ -73,7 +71,7 @@ encounterfile=open(filename,'wb')
 
 battleCount = 0
 teamCount = 0
-counter = {'raw': {}, 'real': {}, 'weighted': {}, 'wins': {}}
+counter = {'raw': {}, 'real': {}, 'weighted': {}, 'wins': {}, 'uniqueWins': {}, 'unique': {}}
 leadCounter = {'raw': {}, 'weighted': {}, 'wins': {}}
 #We're not doing these right now
 #turnCounter = {}
@@ -108,6 +106,15 @@ for line in file:
 			if teamtype:
 				if teamtype not in battle[player]['tags']:
 					continue
+			enemy_team = list()
+			for enemy_player in {'p1','p2'} - {player}:
+				for poke in battle[enemy_player]['team']:
+					species = poke['species']
+					for alias in aliases:
+						if species in aliases[alias]:
+							species = alias
+							break
+					enemy_team.append(species)
 			team = []
 			if 'rating' in list(battle[player].keys()):
 				if 'rpr' in list(battle[player]['rating'].keys()) and 'rprd' in list(battle[player]['rating'].keys()):
@@ -144,6 +151,8 @@ for line in file:
 				if species not in list(counter['raw'].keys()):
 					counter['raw'][species]=0.0
 					counter['real'][species]=0.0
+					counter['uniqueWins'][species]=0.0
+					counter['unique'][species]=0.0
 					counter['weighted'][species]=0.0
 					counter['wins'][species]=0.0
 			
@@ -151,6 +160,14 @@ for line in file:
 				counter['raw'][species]=counter['raw'][species]+1.0
 				if poke['turnsOut'] > 0:
 					counter['real'][species]=counter['real'][species]+1.0
+					# unqiue
+					if species not in enemy_team:
+						counter['unique'][species]=counter['unique'][species]+1.0
+						if 'outcome' in list(battle[player].keys()):
+							if battle[player]['outcome'] == 'win':
+								counter["uniqueWins"][species] = counter["uniqueWins"][species] + 1
+						else:
+							counter["uniqueWins"][species] = counter["uniqueWins"][species] + 0.5
 				counter['weighted'][species]=counter['weighted'][species]+weight[player]
 				if 'outcome' in list(battle[player].keys()):
 					if battle[player]['outcome'] == 'win':
@@ -242,12 +259,12 @@ for line in file:
 	
 file.close()
 total={}
-for i in ['raw','real','weighted']:
+for i in ['raw','real','weighted', 'unique', 'uniqueWins']:
 	total[i] = sum(counter[i].values())
 
 pokedict = {}
 for i in list(counter['raw'].keys()):
-	pokedict[i]=[counter['raw'][i],counter['real'][i],counter['weighted'][i], counter["wins"][i]]
+	pokedict[i]=[counter['raw'][i],counter['real'][i],counter['weighted'][i], counter["wins"][i], counter["unique"][i], counter["uniqueWins"][i]]
 
 if 'empty' in list(pokedict.keys()): #delete no-entry slot
 		del pokedict['empty']
@@ -264,21 +281,23 @@ pickle.dump(encounterMatrix,encounterfile)
 encounterfile.close()
 
 #sort by weighted usage
-if tier in ['challengecup1v1','1v1']:
+# if tier in ['challengecup1v1','1v1']:
+if tier in ['challengecup1v1','1v1'] or 'vgc' in tier:
 	pokes=sorted(pokes, key=lambda pokes:-pokes[2])
 else:
 	pokes=sorted(pokes, key=lambda pokes:-pokes[3])
 p=[]
 usagefile.write(" Total battles: "+str(battleCount)+"\n")
-usagefile.write(" + ---- + ------------------ + --------- + ------ + -------- + \n")
-usagefile.write(" | Rank | Pokemon            | Usage %   | Raw    | Win Rate | \n")
-usagefile.write(" + ---- + ------------------ + --------- + ------ + -------- + \n")
+usagefile.write(" + ---- + ------------------ + --------- + ------ + -------- + ----- + -------- + \n")
+usagefile.write(" | Rank | Pokemon            | Usage %   | Raw    | Win Rate | True  | True WR% | \n")
+usagefile.write(" + ---- + ------------------ + --------- + ------ + -------- + ----- + -------- + \n")
 for i in range(0,len(pokes)):
 	if pokes[i][1] == 0:
 		break
-	usagefile.write(' | %-4d | %-18s | %8.4f%% | %-6d | %7.3f%% | \n' % (i+1, pokes[i][0], 100.0*pokes[i][3]/max(total['weighted'],1.0)*6.0, pokes[i][1], 100*pokes[i][4]/pokes[i][1]))
+	trueWR = 100*pokes[i][6]/pokes[i][5] if pokes[i][5] else 0
+	usagefile.write(' | %-4d | %-18s | %8.4f%% | %-6d | %7.3f%% | %-5d | %7.3f%% | \n' % (i+1, pokes[i][0], 100.0*pokes[i][3]/max(total['weighted'],1.0)*6.0, pokes[i][1], 100*pokes[i][4]/pokes[i][1], pokes[i][2], trueWR))
 	p.append(pokes[i])
-usagefile.write(" + ---- + ------------------ + --------- + ------ + -------- + \n")
+usagefile.write(" + ---- + ------------------ + --------- + ------ + -------- + ----- + -------- + \n")
 usagefile.close()
 
 if t not in nonSinglesFormats and t not in ['1v1','challengecup1vs1']: #lead stats for doubles is not currently supported
