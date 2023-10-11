@@ -2,7 +2,7 @@
 #This file is included solely to be used as an example. It will likely need to be heavily modified from month to month
 #(or from run to run)
 
-logFolder=/home/ps/main/logs
+logFolder=/var/html/pokemon-showdown-client/data/pokemon-showdown/logs
 month="2020-08"
 mkdir Raw
 

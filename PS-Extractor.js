@@ -1,5 +1,5 @@
 // Adapted from Karthik99999's Radical Red Showdown
-const Dex = require('../pokemon-showdown/dist/sim/dex').Dex;
+const Dex = require('../pokemon-showdown/dist/sim/dex').Dex.mod('gen8eliteredux');
 
 keyLookup = {}
 baseStats = {}
